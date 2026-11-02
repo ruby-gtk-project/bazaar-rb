@@ -19,21 +19,31 @@ skill. No app code was written in this step.
 
 | | upstream `src/` | port `lib/` on `ruby` |
 |---|---:|---:|
-| widget rows | 1095 | 0 |
-| distinct widget types | 62 | 4 |
-| distinct CSS classes | 114 | 0 |
-| distinct signals connected | 97 | 1 |
-| GAction names (scan-visible) | 37 | 0 |
+| widget rows | 1095 | partial (29 files) |
+| distinct widget types | 62 | ~35 |
+| distinct CSS classes | 114 | `lib/style.css` carried over |
+| distinct signals connected | 97 | ~40 |
+| GAction names (scan-visible) | 37 | 20 |
 | declarative UI files (`.blp`) | 60 | n/a (house style builds in code) |
-| `lib/*.rb` component files | — | 0 |
+| `lib/*.rb` component files | — | 29 |
 
-The port is a skeleton: `lib/bazaar.rb`, `lib/bazaar/rb/version.rb` and
-`lib/bazaar/application.rb`, the last being an `Adw.ApplicationWindow` holding
-one `Adw.StatusPage` that reads "The Ruby port has not been written yet."
-**Every component below is absent.** `lib/bazaar/application.rb` is the single
-partial: it has the `Gtk::Application` + window + `Adw::ToolbarView` +
-`Adw::HeaderBar` shell and none of upstream's 13 app actions, 6 accelerators,
-menus or daemon mode.
+**Port state as of this refresh** (re-read after the models / Flatpak backend /
+library-window commits landed). `lib/` holds 29 `.rb` files, ~7.2k lines, plus
+`lib/style.css`. Ported, in whole or in part: the application shell, the main
+window (Library tab only — Curated, Explore and Search are still absent, and 7
+of 13 window actions are installed), the shortcuts dialog, the about dialog, the
+preferences dialog, the error dialog, the library page, the releases list, the
+list-tile base plus the installed and transaction tiles, the updates card, the
+search bar, the progress bar, the transact icon, the AppStream description
+render, the application map factory, and the non-UI model/service layer
+(`state_info`, `entry`, `entry_group`, `backend`, `flatpak_backend`,
+`transaction`, `transaction_manager`, `search_engine`, `appstream_parser`,
+`blocklist`, `settings`). `template_callbacks.rb` has 28 of upstream's 228
+closure names.
+
+Everything else in the tables below is still absent — most importantly the full
+view, the Curated / Explore / Search pages, the inspector, all 13 remaining
+dialogs, and every tile other than the two above.
 
 House shape, from the pilot at `gnome-contacts-rb`: one upstream unit becomes
 one flat `lib/<thing>.rb` holding a plain top-level class, `# frozen_string_literal: true`
@@ -50,14 +60,14 @@ is called out in the Notes column.
 | Upstream | → `lib/` | Kind | Present | Notes |
 |---|---|---|---|---|
 | `src/bz-application.c/.h`, `src/main.c`, `src/bazaar-daemon.c` | `lib/bazaar/application.rb` | application | partial | `AdwApplication` subclass. 13 actions: `flathub-login`, `flathub-logout`, `flathub-favorites`, `quit`, `preferences`, `about`, `sync-remotes`, `search` (`s`), `show-app-id` (`s`), `donate`, `bazaar-inspector`, `toggle-debug-mode`, `open-location` (`s`). 6 accels: `<primary>q`, `<primary>comma`, `<primary>r`, `<primary>f` (`app.search('')`), `<primary><alt><shift>i`, `<primary><alt>d`. CLI options `--help --no-window --extra-blocklist --extra-curated-config --extra-content-config --search-for`; `--no-window` is daemon mode |
-| `src/bz-window.blp/.c/.h` | `lib/window.rb` | window | no | `AdwApplicationWindow`, 1220×900, min 360×294. `Gtk.Overlay` → `Adw.ToolbarView` → `Adw.BreakpointBin` (`max-width: 700px`) → `Adw.ToastOverlay` → `Adw.NavigationView` → `Adw.ToolbarView` → `Gtk.Stack` (`loading` / `main`) → `Adw.ViewStack` with 4 pages: browse/Curated, flathub/Explore, installed/Library (badge = n available updates), search/Search. Top bar: debug `Gtk.Box` (`bz-debug`) + bug button, account `Gtk.MenuButton` (`circular`, `flat`) with `Adw.Avatar`, busy `Gtk.Revealer` + `Adw.Spinner`, `Adw.ViewSwitcher` + title `Gtk.Label`, primary `Gtk.MenuButton`. Three `Adw.Banner`s (donations `bz-donations-banner`, cached-Flathub, metered-connection). Bottom: `Adw.ViewSwitcherBar`. `Gtk.ShortcutController` binds `Escape`, `Back`, `BackSpace`, `<ctrl>g` → `action(escape)`. `Gtk.DropTarget` (copy) for dropped `.flatpak`/`.flatpakref`. 13 `install_action`s: `escape`, `window.user-data`, `window.open-library`, `window.open-flathub-page`, `window.install-group` `(sb)`, `window.remove-group` `(sb)`, `window.cancel-group` `s`, `window.show-group` `s`, `window.addons-group` `s`, `window.bulk-install`, `window.launch-group` `s`, `window.activate-hook-app` `s`, `window.open-user-data-folder` `s` |
-| `src/bz-window.blp` (`menu primary_menu`, `account_menu`, `debug_menu`) | `lib/window.rb` | menu | no | primary: 4 sections — Donate; Refresh / Login With Flathub (`hidden-when: action-disabled`) / Manage Leftover User Data; Preferences / Keyboard Shortcuts / About; Quit. account: Favorites; Log Out. debug: Open Bazaar Inspector |
-| `src/shortcuts-dialog.blp` | `lib/shortcuts_dialog.rb` | shortcuts | no | Standalone `Adw.ShortcutsDialog`, no backing `.c`. 3 `Adw.ShortcutsSection`s — Navigation (Open Explore `<Control>e`, Open Library `<Control>d`, Open Search), Remotes (Sync Remotes), General (Preferences, Show Shortcuts, Close Window `<Control>w`, Quit) |
-| `src/bz-application.c` (`about` action) | `lib/about_dialog.rb` | dialog | no | `Adw.AboutDialog`, release notes from `src/release-notes.xml.in` |
-| `src/bz-preferences-dialog.blp/.c/.h` | `lib/preferences_dialog.rb` | preferences | no | `AdwPreferencesDialog`, 19 widgets: `Adw.PreferencesPage`, `Adw.PreferencesGroup`s, `Adw.SwitchRow`s and `Adw.ComboRow`-style rows over the GSettings keys below |
+| `src/bz-window.blp/.c/.h` | `lib/window.rb` | window | partial | `AdwApplicationWindow`, 1220×900, min 360×294. `Gtk.Overlay` → `Adw.ToolbarView` → `Adw.BreakpointBin` (`max-width: 700px`) → `Adw.ToastOverlay` → `Adw.NavigationView` → `Adw.ToolbarView` → `Gtk.Stack` (`loading` / `main`) → `Adw.ViewStack` with 4 pages: browse/Curated, flathub/Explore, installed/Library (badge = n available updates), search/Search. Top bar: debug `Gtk.Box` (`bz-debug`) + bug button, account `Gtk.MenuButton` (`circular`, `flat`) with `Adw.Avatar`, busy `Gtk.Revealer` + `Adw.Spinner`, `Adw.ViewSwitcher` + title `Gtk.Label`, primary `Gtk.MenuButton`. Three `Adw.Banner`s (donations `bz-donations-banner`, cached-Flathub, metered-connection). Bottom: `Adw.ViewSwitcherBar`. `Gtk.ShortcutController` binds `Escape`, `Back`, `BackSpace`, `<ctrl>g` → `action(escape)`. `Gtk.DropTarget` (copy) for dropped `.flatpak`/`.flatpakref`. 13 `install_action`s: `escape`, `window.user-data`, `window.open-library`, `window.open-flathub-page`, `window.install-group` `(sb)`, `window.remove-group` `(sb)`, `window.cancel-group` `s`, `window.show-group` `s`, `window.addons-group` `s`, `window.bulk-install`, `window.launch-group` `s`, `window.activate-hook-app` `s`, `window.open-user-data-folder` `s` |
+| `src/bz-window.blp` (`menu primary_menu`, `account_menu`, `debug_menu`) | `lib/window.rb` | menu | partial | primary: 4 sections — Donate; Refresh / Login With Flathub (`hidden-when: action-disabled`) / Manage Leftover User Data; Preferences / Keyboard Shortcuts / About; Quit. account: Favorites; Log Out. debug: Open Bazaar Inspector |
+| `src/shortcuts-dialog.blp` | `lib/shortcuts_dialog.rb` | shortcuts | yes | Standalone `Adw.ShortcutsDialog`, no backing `.c`. 3 `Adw.ShortcutsSection`s — Navigation (Open Explore `<Control>e`, Open Library `<Control>d`, Open Search), Remotes (Sync Remotes), General (Preferences, Show Shortcuts, Close Window `<Control>w`, Quit) |
+| `src/bz-application.c` (`about` action) | `lib/about_dialog.rb` | dialog | yes | `Adw.AboutDialog`, release notes from `src/release-notes.xml.in` |
+| `src/bz-preferences-dialog.blp/.c/.h` | `lib/preferences_dialog.rb` | preferences | partial | `AdwPreferencesDialog`, 19 widgets: `Adw.PreferencesPage`, `Adw.PreferencesGroup`s, `Adw.SwitchRow`s and `Adw.ComboRow`-style rows over the GSettings keys below |
 | `src/bz-inspector.blp/.c/.h` | `lib/inspector.rb` | window | no | `AdwWindow`. The largest single unit: 104 widget rows, 8 CSS classes. Debug inspector behind `app.bazaar-inspector` |
 | `src/bz-entry-inspector.blp/.c/.h` | `lib/entry_inspector.rb` | window | no | `AdwWindow`, 18 widgets. Per-entry debug view |
-| `src/template-callbacks.c/.h` | `lib/template_callbacks.rb` | helpers | no | The blueprint closure library. 228 distinct `$closure(...)` names are referenced across the 60 blueprints (`$format_title`, `$invert_boolean`, `$logical_and`, `$is_null`, `$choose_object`, …). In the port these become plain Ruby methods plus explicit `notify::` handlers |
+| `src/template-callbacks.c/.h` | `lib/template_callbacks.rb` | helpers | partial | The blueprint closure library. 228 distinct `$closure(...)` names are referenced across the 60 blueprints (`$format_title`, `$invert_boolean`, `$logical_and`, `$is_null`, `$choose_object`, …). In the port these become plain Ruby methods plus explicit `notify::` handlers |
 
 ## Pages
 
@@ -65,7 +75,7 @@ is called out in the Notes column.
 |---|---|---|---|---|
 | `src/bz-curated-view.blp/.c/.h` | `lib/curated_view.rb` | page | no | 8/1/3 + 1/0/2 — `AdwBin`. The Curated tab; `browse-flathub` signal; `Adw.StatusPage` empty state |
 | `src/bz-flathub-page.blp/.c/.h` | `lib/flathub_page.rb` | page | no | 35/12/1 + 2/0/3 — `AdwBin`. The Explore tab; `open-search` signal; `Adw.StatusPage` for offline/error |
-| `src/bz-library-page.blp/.c/.h` | `lib/library_page.rb` | page | no | 32/10/6 + 1/0/2 — `AdwBin`. The Library tab; `update` signal; `installed-list-view`, `installed-section`, `installed-pill`, `installed-size` CSS; `Adw.StatusPage` for "nothing installed" |
+| `src/bz-library-page.blp/.c/.h` | `lib/library_page.rb` | page | yes | 32/10/6 + 1/0/2 — `AdwBin`. The Library tab; `update` signal; `installed-list-view`, `installed-section`, `installed-pill`, `installed-size` CSS; `Adw.StatusPage` for "nothing installed" |
 | `src/bz-search-page.blp/.c/.h` | `lib/search_page.rb` | page | no | 35/9/6 + 2/1/14 — `AdwBin`. The Search tab; 14 signals, the busiest C file; `search-box`, `search-grid` CSS; `Adw.StatusPage` for no results |
 | `src/bz-full-view.blp/.c/.h` | `lib/full_view.rb` | page | no | 75/24/4 + 3/0/0 — `AdwBin`. The app detail page: second-largest unit, 24 CSS classes (`app-context-bar`, `app-developer`, `app-title`, `full-view-addons`, …), hosts context tiles, screenshots carousel, install controls, share list, developer badge |
 | `src/bz-all-apps-page.blp/.c/.h` | `lib/all_apps_page.rb` | page | no | 6/1/0 — `AdwNavigationPage` |
@@ -86,20 +96,20 @@ is called out in the Notes column.
 | `src/bz-app-size-dialog.blp/.c/.h` | `lib/app_size_dialog.rb` | dialog | no | 22/5/2 + 3/0/0 — `AdwBin` presented as a dialog |
 | `src/bz-bundle-install-dialog.blp/.c/.h` | `lib/bundle_install_dialog.rb` | dialog | no | 60/13/2 + 2/0/0 — `AdwDialog`. Third-largest unit; the drag-and-drop/`.flatpakref` install flow; `Adw.StatusPage` in both halves; result type `src/bz-bulk-install-dialog-result.txt` |
 | `src/bz-donations-dialog.blp/.c/.h` | `lib/donations_dialog.rb` | dialog | no | 18/4/1 + 1/0/1 — `AdwDialog`, `bz-donations-dialog` CSS, `app.donate` |
-| `src/bz-error-dialog.blp/.c/.h` | `lib/error_dialog.rb` | error state | no | 11/4/1 + 1/0/0 — `AdwDialog`. The app's one generic error surface; pairs with `src/error.c` |
+| `src/bz-error-dialog.blp/.c/.h` | `lib/error_dialog.rb` | error state | yes | 11/4/1 + 1/0/0 — `AdwDialog`. The app's one generic error surface; pairs with `src/error.c` |
 | `src/bz-hardware-support-dialog.blp/.c/.h` | `lib/hardware_support_dialog.rb` | dialog | no | 7/1/0 + 1/0/1 — `AdwDialog`; the `device-support-*` icons |
 | `src/bz-license-dialog.blp/.c/.h` | `lib/license_dialog.rb` | dialog | no | 16/1/1 + 3/0/0 — `AdwBin`; SPDX names from `src/spdx.c` |
 | `src/bz-safety-dialog.blp/.c/.h` | `lib/safety_dialog.rb` | dialog | no | 19/5/1 + 5/0/1 — `AdwBin`; rows from `src/bz-safety-row.txt`, scores from `src/safety-calculator.c`; `app-safety-ok/unknown/unsafe` icons |
 | `src/bz-stats-dialog.blp/.c/.h` | `lib/stats_dialog.rb` | dialog | no | 11/2/0 + 1/0/0 — `AdwBreakpointBin`; hosts the world map and data graph |
 | `src/bz-transaction-dialog.c/.h` | `lib/transaction_dialog.rb` | dialog | no | 11/1/0 — **no blueprint**, built entirely in C; result type `src/bz-transaction-dialog-result.txt` |
 | `src/bz-transaction-list-dialog.blp/.c/.h` | `lib/transaction_list_dialog.rb` | dialog | no | 11/3/0 + 1/0/1 — `AdwAlertDialog` |
-| `src/bz-releases-dialog.blp` + `src/bz-releases-list.blp/.c/.h` | `lib/releases_list.rb` | dialog | no | 5/1/0 + 5/1/1 + 12/5/0 — **two blueprints, one source**: the `.c` defines both an `AdwDialog` and an `AdwBin` type. Release data from `src/bz-release.txt` |
+| `src/bz-releases-dialog.blp` + `src/bz-releases-list.blp/.c/.h` | `lib/releases_list.rb` | dialog | partial | 5/1/0 + 5/1/1 + 12/5/0 — **two blueprints, one source**: the `.c` defines both an `AdwDialog` and an `AdwBin` type. Release data from `src/bz-release.txt` |
 
 ## Tiles and rows
 
 | Upstream | → `lib/` | Kind | Present | Scan |
 |---|---|---|---|---|
-| `src/bz-list-tile.c/.h` | `lib/list_tile.rb` | widget (base) | no | 2/2/1 — `GtkWidget` subclass with custom measure/allocate; the parent of 6 tiles below |
+| `src/bz-list-tile.c/.h` | `lib/list_tile.rb` | widget (base) | yes | 2/2/1 — `GtkWidget` subclass with custom measure/allocate; the parent of 6 tiles below |
 | `src/bz-app-tile.blp/.c/.h` | `lib/app_tile.rb` | tile | no | 12/7/0 + 1/0/0 — `GtkButton` **plus a private `GtkLayoutManager` subclass** in the same file; `app-tile`, `lowres-icon` |
 | `src/bz-addon-tile.blp/.c/.h` | `lib/addon_tile.rb` | tile | no | 8/5/1 + rows — `BzListTile` subclass |
 | `src/bz-article-tile.blp/.c/.h` | `lib/article_tile.rb` | tile | no | 6/4/1 + 1/0/0 — `BzListTile` subclass |
@@ -108,9 +118,9 @@ is called out in the Notes column.
 | `src/bz-curated-app-tile.c` | `lib/curated_app_tile.rb` | tile | no | 1/0/0 — `AdwBin`, no blueprint, no header |
 | `src/bz-favorites-tile.blp/.c/.h` | `lib/favorites_tile.rb` | tile | no | 10/7/1 + 1/1/0 — `BzListTile` subclass, `favorite` |
 | `src/bz-featured-tile.blp/.c/.h` | `lib/featured_tile.rb` | tile | no | 10/4/0 + 1/0/2 — `GtkButton` **plus a private layout manager**; `featured-tile` |
-| `src/bz-installed-tile.blp/.c/.h` | `lib/installed_tile.rb` | tile | no | 10/8/1 — `BzListTile`; installs actions `installed-tile.install-addons`, `installed-tile.permissions` |
+| `src/bz-installed-tile.blp/.c/.h` | `lib/installed_tile.rb` | tile | yes | 10/8/1 — `BzListTile`; installs actions `installed-tile.install-addons`, `installed-tile.permissions` |
 | `src/bz-rich-app-tile.blp/.c/.h` | `lib/rich_app_tile.rb` | tile | no | 15/8/2 — `BzListTile`; `rich-tile-card`, `rich-screenshot-box` |
-| `src/bz-transaction-tile.blp/.c/.h` | `lib/transaction_tile.rb` | tile | no | 44/24/1 — `BzListTile`. Most CSS-heavy single file (24 classes) |
+| `src/bz-transaction-tile.blp/.c/.h` | `lib/transaction_tile.rb` | tile | yes | 44/24/1 — `BzListTile`. Most CSS-heavy single file (24 classes) |
 | `src/bz-user-data-tile.blp/.c/.h` | `lib/user_data_tile.rb` | tile | no | 11/5/1 + 1/0/1 — `AdwBin` |
 | `src/bz-entry-selection-row.blp/.c/.h` | `lib/entry_selection_row.rb` | row | no | 3/0/0 + 1/0/0 — `AdwActionRow` |
 | `src/bz-context-row.c/.h` | `lib/context_row.rb` | row | no | 2/1/0 — no blueprint |
@@ -129,8 +139,8 @@ is called out in the Notes column.
 | `src/bz-article-list-view.c/.h` | `lib/article_list_view.rb` | view | no | 1/0/1 — `AdwBin`, no blueprint; `src/article-list-schema.xml` |
 | `src/bz-dynamic-list-view.c/.h` | `lib/dynamic_list_view.rb` | view | no | 13/2/5 — `AdwBin`, no blueprint. The recycling list host used by every page; installs `list.scroll-to-item` |
 | `src/bz-install-controls.blp/.c/.h` + `src/bz-install-controls.wdgt` | `lib/install_controls.rb` | control | no | 15/4/1 + 1/2/3 — `GtkBox`. The install/remove/cancel button cluster; its icon is a **`.wdgt` bge spec**, not a widget tree |
-| `src/bz-updates-card.blp/.c/.h` | `lib/updates_card.rb` | card | no | 5/2/1 + 8/2/3 — `AdwBin` |
-| `src/bz-search-bar.blp/.c/.h` | `lib/search_bar.rb` | control | no | 6/4/5 + 2/1/0 — `GtkWidget` subclass (custom allocate); `searchbar-button`, `search-box` |
+| `src/bz-updates-card.blp/.c/.h` | `lib/updates_card.rb` | card | yes | 5/2/1 + 8/2/3 — `AdwBin` |
+| `src/bz-search-bar.blp/.c/.h` | `lib/search_bar.rb` | control | yes | 6/4/5 + 2/1/0 — `GtkWidget` subclass (custom allocate); `searchbar-button`, `search-box` |
 | `src/bz-search-filter-popover.blp/.c/.h` | `lib/search_filter_popover.rb` | popover | no | 11/1/1 + 3/1/5 — `GtkPopover`; the FOSS / Flathub-only / verified / EOL filters, backed by GSettings |
 | `src/bz-search-pill-list.c/.h` | `lib/search_pill_list.rb` | control | no | 2/2/1 — `GtkBox`, no blueprint; `search-pill` |
 | `src/bz-subcategory-list.c/.h` | `lib/subcategory_list.rb` | control | no | 3/1/1 — `GtkBox`, no blueprint; spec `src/bz-flathub-sub-category.txt` |
@@ -138,11 +148,11 @@ is called out in the Notes column.
 | `src/bz-screenshots-carousel.blp/.c/.h` | `lib/screenshots_carousel.rb` | view | no | 12/10/3 + 1/2/3 — `GtkWidget` subclass; `screenshot-carousel`, `-dark`, `-light` |
 | `src/bz-decorated-screenshot.blp/.c/.h` | `lib/decorated_screenshot.rb` | widget | no | 2/2/0 + 1/0/2 — `GtkButton`; `decorated-screenshot` |
 | `src/bz-screenshot.c/.h` | `lib/screenshot.rb` | widget | no | 1/0/3 — `GtkWidget` subclass, custom snapshot |
-| `src/bz-appstream-description-render.blp/.c/.h` | `lib/appstream_description_render.rb` | widget | no | 3/0/0 + 1/1/4 — `AdwBin`; renders AppStream description markup; pairs with `src/bz-appstream-parser.c` and `src/bz-newline-parser.c` |
+| `src/bz-appstream-description-render.blp/.c/.h` | `lib/appstream_description_render.rb` | widget | yes | 3/0/0 + 1/1/4 — `AdwBin`; renders AppStream description markup; pairs with `src/bz-appstream-parser.c` and `src/bz-newline-parser.c` |
 | `src/bz-developer-badge.blp/.c/.h` | `lib/developer_badge.rb` | widget | no | 6/2/3 + 1/2/0 — `GtkBox`; `developer-badge`, `verified`; spec `src/bz-verification-status.txt` |
 | `src/bz-favorite-button.blp/.c/.h` | `lib/favorite_button.rb` | widget | no | 4/3/1 + 6/1/1 — `GtkButton`; `bookmark-filled`/`bookmark-outline`/`heart-*` icons |
-| `src/bz-progress-bar.blp/.c/.h` + `src/progress-bar-designs/` | `lib/progress_bar.rb` | widget | no | 1/0/0 + 1/0/0 — `AdwBin`, themed by `global-progress-bar-theme`; the `pride` design is a separate C module driven by `pride-flags.yaml` + `src/bz-pride-flag-*.txt` |
-| `src/bz-transact-icon.c/.h` + `src/bz-transact-icon.wdgt` | `lib/transact_icon.rb` | widget | no | 2/1/8 — `AdwBin`; spec `src/bz-transact-icon-info.txt`; icon is a **`.wdgt` bge spec** |
+| `src/bz-progress-bar.blp/.c/.h` + `src/progress-bar-designs/` | `lib/progress_bar.rb` | widget | partial | 1/0/0 + 1/0/0 — `AdwBin`, themed by `global-progress-bar-theme`; the `pride` design is a separate C module driven by `pride-flags.yaml` + `src/bz-pride-flag-*.txt` |
+| `src/bz-transact-icon.c/.h` + `src/bz-transact-icon.wdgt` | `lib/transact_icon.rb` | widget | partial | 2/1/8 — `AdwBin`; spec `src/bz-transact-icon-info.txt`; icon is a **`.wdgt` bge spec** |
 | `src/bz-lozenge.c/.h` | `lib/lozenge.rb` | widget | no | 6/3/0 — `GtkBox`, no blueprint; `lozenge`, `circular-lozenge`, `lozenge-ring-button` |
 | `src/bz-data-graph.c/.h` | `lib/data_graph.rb` | widget | no | 8/8/8 — `GtkWidget` subclass drawing its own chart; `src/bz-data-point.txt`, `bz-linear-function.txt`, `bz-exponential-function.txt` |
 | `src/bz-world-map.c/.h` + `src/bz-world-map-parser.c/.h` | `lib/world_map.rb` | widget | no | 7/6/7 — `GtkWidget` subclass; needs `countries.gvariant`, generated by `scripts/countries.py` from `scripts/countries.json.in`; `src/bz-country.txt`, `bz-country-data-point.txt` |
@@ -154,7 +164,7 @@ is called out in the Notes column.
 | `src/bz-zoom.c/.h` | `lib/zoom.rb` | controller | no | 2/0/8 — pinch/scroll zoom behaviour for the screenshot page |
 | `src/bz-group-tile-css-watcher.c/.h` | `lib/group_tile_css_watcher.rb` | behaviour | no | 1/0/1 — `GObject` that attaches/removes CSS classes on tiles as entry state changes. The dynamic-CSS source for the tile classes above |
 | `src/transaction-notification.c/.h` | `lib/transaction_notification.rb` | notification | no | `GNotification`s for finished/failed transactions |
-| `src/bz-application-map-factory.c/.h` | `lib/application_map_factory.rb` | factory | no | 1/0/0 — builds the per-entry widgets handed to `BzDynamicListView` |
+| `src/bz-application-map-factory.c/.h` | `lib/application_map_factory.rb` | factory | yes | 1/0/0 — builds the per-entry widgets handed to `BzDynamicListView` |
 | `src/shell-search-provider-dbus-interfaces.xml`, `data/dbus/*`, `data/*.search-provider.ini.in` | `lib/shell_search_provider.rb` | service | no | GNOME Shell search provider; the pilot has a `shell_search_provider.rb` to copy from |
 
 ## Non-UI layer the components depend on
