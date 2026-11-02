@@ -195,6 +195,11 @@
             pkgs.rubyPackages_3_4.gettext
             # The spec runner. The suite is plain RSpec, so this is enough.
             pkgs.rubyPackages_3_4.rspec
+            # The AppStream catalogues the Flatpak backend reads are XML, and
+            # rexml stopped being a default gem in Ruby 3.4. It is not in
+            # gemset.nix yet (bundix needs network access to add it), so the
+            # dev shell carries it for now.
+            pkgs.rubyPackages_3_4.rexml
             # This machine may have no display server at all, so the shell
             # carries one it can start itself: `xvfb-run ruby exe/<app>` both
             # launches the app and is how test/drive_*.rb is run.
