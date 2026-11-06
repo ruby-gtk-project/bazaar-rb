@@ -9,8 +9,17 @@ require_relative "entry"
 # an Entry.
 #
 # Ported from upstream's src/bz-appstream-parser.c. Upstream hands the XML to
-# libappstream and reads AsComponent getters; the port walks the same
-# catalogue XML with REXML, because the Ruby bindings carry no libappstream.
+# libappstream and reads AsComponent getters. The `appstream` gem (GObject
+# Introspection over the same libappstream) is on the Gemfile and does load
+# (`AppStream.constants.size` works) and its scalar getters work fine
+# (`id`, `name`, `summary`, `developer`, `project_license`, `floss?`), but
+# every getter this parser actually needs is a GPtrArray of objects —
+# `bundles`, `icons`, `screenshots`, `content_ratings`, `requires` /
+# `recommends` / `supports` — and the installed `gobject-introspection` gem
+# has no marshaller for that: each one raises `NotImplementedError: TODO:
+# GIArgument(array)[ptr-array] -> Ruby` when called directly against a
+# parsed component. So the port walks the same catalogue XML with REXML
+# instead.
 # Every mapping below — which url kinds become share links, how a screenshot
 # is proxied through imgproxy.flathub.org, how an icon is chosen, how the
 # control and display-length relations turn into bitfields — follows that

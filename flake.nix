@@ -25,6 +25,17 @@
           libadwaita
           harfbuzz
           librsvg
+          # Binding gems' native libraries: each gem is a loader over this
+          # typelib, read from GI_TYPELIB_PATH below. appstream, flatpak,
+          # libglycin and libglycin-gtk4 ship their typelib in the default
+          # output; libxmlb and malcontent ship it in `.lib` instead.
+          appstream
+          flatpak
+          libglycin
+          libglycin-gtk4
+          libxmlb.lib
+          malcontent.lib
+          libsoup_3
         ]
         # The Ruby `pkg-config` gem resolves `Requires.private` transitively and
         # hard-fails if any .pc in the chain is missing, so gtk4's whole private

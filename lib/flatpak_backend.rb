@@ -10,11 +10,21 @@ require_relative "appstream_parser"
 # FlatpakBackend is the Flatpak implementation of Backend.
 #
 # Ported from upstream's src/bz-flatpak-instance.c and src/bz-flatpak-entry.c.
-# Upstream links against libflatpak; the Ruby bindings have no libflatpak, so
-# the port drives the `flatpak` command line, which exposes the same four
-# things those files need: the configured remotes, the refs each remote
-# carries with their sizes, the installed refs with their versions, and the
-# refs that have an update waiting.
+# Upstream links against libflatpak directly. The `flatpak` gem (GObject
+# Introspection over the same libflatpak) is on the Gemfile and does load
+# (`Flatpak.constants.size` works), but every collection-returning libflatpak
+# call this backend needs — Installation#list_remotes,
+# #list_installed_refs, #list_remote_refs_sync — returns a GPtrArray of
+# objects, and the installed `gobject-introspection` gem has no marshaller
+# for that case: it raises `NotImplementedError: TODO: GIArgument(array)
+# [ptr-array] -> Ruby` (reproduced directly against AppStream::Component's
+# equivalent GPtrArray getters — see appstream_parser.rb — since no flatpak
+# installation exists in this sandbox to call the Flatpak methods on
+# directly; the marshalling code is generic over element type, not
+# per-binding). So the port drives the `flatpak` command line instead, which
+# exposes the same four things those files need: the configured remotes, the
+# refs each remote carries with their sizes, the installed refs with their
+# versions, and the refs that have an update waiting.
 #
 # The identity scheme is upstream's, because the entry cache, the search
 # index and the transaction manager all key on it:
