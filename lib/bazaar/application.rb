@@ -19,6 +19,7 @@ require_relative "../about_dialog"
 require_relative "../shortcuts_dialog"
 require_relative "../preferences_dialog"
 require_relative "../error_dialog"
+require_relative "../donations_dialog"
 
 module Bazaar
   # Application is Bazaar's GApplication: it owns the state every page reads,
@@ -165,7 +166,7 @@ module Bazaar
         action("preferences") { PreferencesDialog.new(state: state).build.present(active_window) }
         action("sync-remotes") { sync_remotes }
         action("toggle-debug-mode") { state.debug_mode = !state.debug_mode? }
-        action("donate") { open_location("https://usebazaar.org/#donate") }
+        action("donate") { present_donations_dialog }
         string_action("search") { |text| search(text) }
         string_action("show-app-id") { |id| show_app_id(id) }
         string_action("open-location") { |uri| open_location(uri) }
@@ -217,6 +218,14 @@ module Bazaar
           else window.search(group.title.to_s)
           end
         end
+      end
+
+      # Ported from bz_application_donate_action: shows the "What's New"
+      # dialog and marks the donations banner dismissed, rather than opening
+      # a URL directly.
+      def present_donations_dialog
+        DonationsDialog.new.build.present(active_window)
+        state.donation_prompt_dismissed = true
       end
 
       def open_location(uri)
