@@ -12,6 +12,7 @@ require_relative "../blocklist"
 require_relative "../backend"
 require_relative "../flatpak_backend"
 require_relative "../malcontent_service"
+require_relative "../auth_state"
 require_relative "../transaction"
 require_relative "../transaction_manager"
 require_relative "../search_engine"
@@ -77,6 +78,10 @@ module Bazaar
     def backend = @backend ||= FlatpakBackend.new
 
     def malcontent = @malcontent ||= MalcontentService.new(state: state)
+
+    # The Flathub login session; the login page and the user-data page
+    # (both still to be ported) read and update this.
+    def auth_state = @auth_state ||= AuthState.new
 
     def transactions
       @transactions ||= TransactionManager.new(backend: backend).tap do |manager|
