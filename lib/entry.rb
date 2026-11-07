@@ -68,12 +68,22 @@ class ContentRating
     @attributes = attributes.transform_keys(&:to_s).transform_values(&:to_s)
   end
 
+  # The age, in years, the strictest declared attribute corresponds to.
+  # Upstream's as_content_rating_attribute_get_csm_age carries a different
+  # threshold per OARS id (e.g. "language-profanity: mild" is 8, but
+  # "violence-cartoon: mild" is 3); the port keeps a single VALUES ->
+  # age scale instead of reproducing that whole table, which is enough to
+  # drive malcontent's "show nothing above the parental ceiling" gate.
+  AGE_BY_VALUE = { "none" => 0, "mild" => 3, "moderate" => 7, "intense" => 16 }.freeze
+
   def [](id) = @attributes[id.to_s]
   def empty? = @attributes.empty?
 
   # The ids whose value is anything other than "none", which is what the
   # dialogs list.
   def declared = @attributes.reject { |_, value| value == "none" }
+
+  def age = @attributes.values.filter_map { |value| AGE_BY_VALUE[value] }.max || 0
 
   def to_h = { kind: @kind, attributes: @attributes }
 

@@ -13,7 +13,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
 
         # Shared libraries every ruby-gnome extension links against.
-        gtkStack = with pkgs; [
+        gtkStackLibs = with pkgs; [
           glib
           gobject-introspection
           cairo
@@ -36,7 +36,25 @@
           libxmlb.lib
           malcontent.lib
           libsoup_3
-        ]
+        ];
+
+        # Runtime-only pieces of the same gems above: not typelibs, so they
+        # never belong in `typelibPath`, but required for the calls to
+        # actually work rather than merely load.
+        #   * glycin-loaders — the sandboxed per-format workers `Gly::Loader`
+        #     shells out to; without it every load raises Gly::LoaderError
+        #     ("No image loaders are configured"). Found via XDG_DATA_DIRS
+        #     (share/glycin-loaders/<abi>/conf.d), not GI_TYPELIB_PATH.
+        #   * glib-networking — the GIO TLS backend `soup3` needs for any
+        #     https:// request; without it Soup::Session raises
+        #     GLib::Error("TLS support is not available"). Found via
+        #     GIO_EXTRA_MODULES, a GIO module directory, not a typelib.
+        runtimeExtras = with pkgs; [
+          glycin-loaders
+          glib-networking
+        ];
+
+        gtkStack = gtkStackLibs
         # The Ruby `pkg-config` gem resolves `Requires.private` transitively and
         # hard-fails if any .pc in the chain is missing, so gtk4's whole private
         # closure has to be on PKG_CONFIG_PATH, not just its public deps.
@@ -140,7 +158,7 @@
           # the wrapper never looks. The wrapper below is built by hand and
           # points at both the pre- and post-move paths.
           nativeBuildInputs = [ pkgs.makeWrapper ];
-          buildInputs = [ gems ] ++ gtkStack;
+          buildInputs = [ gems ] ++ gtkStack ++ runtimeExtras;
 
           dontBuild = true;
 
@@ -175,7 +193,9 @@
               --prefix XDG_DATA_DIRS : "$out/share/gsettings-schemas/bazaar-0.1.0" \
               --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}" \
               --prefix XDG_DATA_DIRS : "${pkgs.gtk4}/share/gsettings-schemas/${pkgs.gtk4.name}" \
-              --prefix XDG_DATA_DIRS : "${pkgs.adwaita-icon-theme}/share"
+              --prefix XDG_DATA_DIRS : "${pkgs.adwaita-icon-theme}/share" \
+              --prefix XDG_DATA_DIRS : "${pkgs.glycin-loaders}/share" \
+              --prefix GIO_EXTRA_MODULES : "${pkgs.glib-networking}/lib/gio/modules"
 
             runHook postInstall
           '';
@@ -217,12 +237,16 @@
             pkgs.xvfb-run
             pkgs.gsettings-desktop-schemas
             pkgs.adwaita-icon-theme
-          ] ++ gtkStack;
+          ] ++ gtkStack ++ runtimeExtras;
 
           # Icons, GSettings schemas and the GTK portal all resolve through
           # XDG_DATA_DIRS; without these the window opens with blank icons.
+          # glycin-loaders' conf.d also resolves through XDG_DATA_DIRS, and
+          # glib-networking's TLS module through GIO_EXTRA_MODULES — see the
+          # comment on `runtimeExtras` above.
           shellHook = ''
-            export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk4}/share/gsettings-schemas/${pkgs.gtk4.name}:${pkgs.adwaita-icon-theme}/share:$XDG_DATA_DIRS"
+            export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk4}/share/gsettings-schemas/${pkgs.gtk4.name}:${pkgs.adwaita-icon-theme}/share:${pkgs.glycin-loaders}/share:$XDG_DATA_DIRS"
+            export GIO_EXTRA_MODULES="${pkgs.glib-networking}/lib/gio/modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
             export GI_TYPELIB_PATH="${typelibPath}''${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
             export RUBYLIB="$PWD/lib''${RUBYLIB:+:$RUBYLIB}"
             [ -d data/schemas ] && export GSETTINGS_SCHEMA_DIR="$PWD/data/schemas"

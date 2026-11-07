@@ -11,6 +11,7 @@ require_relative "../application_map_factory"
 require_relative "../blocklist"
 require_relative "../backend"
 require_relative "../flatpak_backend"
+require_relative "../malcontent_service"
 require_relative "../transaction"
 require_relative "../transaction_manager"
 require_relative "../search_engine"
@@ -54,6 +55,7 @@ module Bazaar
         app.signal_connect("startup") do
           load_stylesheet
           install_actions
+          malcontent.start
         end
 
         app.signal_connect("activate") do
@@ -73,6 +75,8 @@ module Bazaar
     def settings = @settings ||= Settings.new
 
     def backend = @backend ||= FlatpakBackend.new
+
+    def malcontent = @malcontent ||= MalcontentService.new(state: state)
 
     def transactions
       @transactions ||= TransactionManager.new(backend: backend).tap do |manager|
@@ -135,6 +139,7 @@ module Bazaar
       when state.show_only_foss? && !group.is_floss then false
       when state.show_only_flathub? && !group.is_flathub then false
       when state.show_only_verified? && !group.is_verified then false
+      when state.parental_age_rating != -1 && group.content_age_rating > state.parental_age_rating then false
       when state.disable_blocklists? then true
       else blocklists.allows?(group.id)
       end

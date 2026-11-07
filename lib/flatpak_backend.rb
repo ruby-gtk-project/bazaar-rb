@@ -3,6 +3,7 @@
 require "open3"
 require "rbconfig"
 require "shellwords"
+require "flatpak"
 require_relative "backend"
 require_relative "entry"
 require_relative "appstream_parser"
@@ -190,17 +191,28 @@ class FlatpakBackend < Backend
   end
 
   # The architecture flatpak itself would install for.
+  #
+  # `Flatpak.default_arch` is a scalar getter, not one of the GPtrArray
+  # collection calls the class comment documents as unmarshallable, so this
+  # one call goes straight through the `flatpak` gem instead of shelling
+  # out to the CLI.
   def arch
-    @arch ||= begin
+    @arch ||= Flatpak.default_arch
+  rescue StandardError
+    cli_arch
+  end
+
+  private
+
+    # Fallback chain when the gem's typelib is not on GI_TYPELIB_PATH:
+    # the CLI, then RbConfig's own idea of the host CPU.
+    def cli_arch
       status, out, = run([@command, "--default-arch"])
       case status
       when true then out.strip
       else default_arch
       end
     end
-  end
-
-  private
 
     def default_arch
       case RbConfig::CONFIG["host_cpu"]

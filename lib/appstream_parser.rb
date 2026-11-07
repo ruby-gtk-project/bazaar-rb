@@ -3,6 +3,10 @@
 require "rexml/document"
 require "zlib"
 require "gtk4"
+require "soup3"
+require "glycin"
+require "libglycin-gtk4"
+require "tempfile"
 require_relative "entry"
 
 # AppstreamParser reads an AppStream catalogue and copies what it finds onto
@@ -363,7 +367,11 @@ module AppstreamParser
         else
           entry.icon_path = best[:path]
           entry.icon_url = best[:url]
-          entry.icon_paintable = load_texture(best[:path])
+          entry.icon_paintable =
+            case best[:local]
+            when true then load_texture(best[:path])
+            else fetch_remote_texture(best[:url])
+            end
         end
       end
 
@@ -406,14 +414,55 @@ module AppstreamParser
         end
       end
 
+      # Decodes a local icon through glycin -- the same sandboxed loader
+      # bz-async-texture.c runs every icon and screenshot through via
+      # `GlyLoader` / `gly_gtk4_frame_get_texture` -- rather than handing the
+      # file straight to Gdk::Texture, which only understands the formats
+      # GTK itself links against.
       def load_texture(path)
         case path
         when nil then nil
-        else Gdk::Texture.new(Gio::File.new_for_path(path))
+        else decode_frame(Gly::Loader.new(Gio::File.new_for_path(path)))
         end
       rescue StandardError
         nil
       end
+
+      # Fetches a remote icon over `soup3` and decodes it the same way, for
+      # the icons that have no local copy under the AppStream catalogue's
+      # icons/flatpak directory (every icon flathub.org serves without a
+      # matching system/user Flatpak install).
+      def fetch_remote_texture(url)
+        case url
+        when nil, "" then nil
+        else
+          message = Soup::Message.new("GET", url)
+          bytes = soup_session.send_and_read(message, nil)
+          case message.status_code
+          when 200..299 then decode_bytes(bytes)
+          else nil
+          end
+        end
+      rescue StandardError
+        nil
+      end
+
+      def soup_session = @soup_session ||= Soup::Session.new
+
+      # glycin's Ruby binding only auto-binds the constructor literally
+      # named `new` (file-based); `Gly::Loader.new_for_bytes` exists in the
+      # typelib but is not generated as a class method, so the fetched bytes
+      # go through a tempfile instead of being handed to glycin directly.
+      def decode_bytes(bytes)
+        Tempfile.create(["bazaar-remote-icon", ".img"]) do |file|
+          file.binmode
+          file.write(bytes.to_s)
+          file.flush
+          decode_frame(Gly::Loader.new(Gio::File.new_for_path(file.path)))
+        end
+      end
+
+      def decode_frame(loader) = GlyGtk4.frame_get_texture(loader.load.next_frame)
 
       # The thumbnail is the image closest to 400x300 of the first
       # screenshot; every screenshot also contributes its largest image,

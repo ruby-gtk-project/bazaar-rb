@@ -71,6 +71,11 @@ class EntryGroup < GLib::Object
     @listeners = []
   end
 
+  # Ported from bz_entry_group_get_content_age_rating: the age the group's
+  # content rating corresponds to, which Application#visible? compares
+  # against StateInfo#parental_age_rating.
+  def content_age_rating = @content_rating&.age || 0
+
   # A group built around one entry the app already holds, used for a local
   # bundle file and for the standalone pages that show a single entry.
   def self.for_single_entry(entry)
