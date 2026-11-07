@@ -245,6 +245,36 @@ plain_check(
 plain_check("account menu item count", menu_window.account_menu.n_items, 2)
 plain_check("debug menu item count", menu_window.debug_menu.n_items, 1)
 
+# HardwareSupportDialog and LicenseDialog are ported and functional, but
+# upstream only reaches them from the entry detail page (bz-full-view),
+# which has no lib/*.rb yet — so there is no action or button in the running
+# app that opens them. These checks build them directly against a real
+# Entry, the way the (not-yet-ported) detail page eventually will, so the
+# classes are proven rather than merely present.
+require_relative "../lib/hardware_support_dialog"
+require_relative "../lib/license_dialog"
+
+def list_box_row_count(list_box)
+  count = 0
+  child = list_box.first_child
+  while child
+    count += 1
+    child = child.next_sibling
+  end
+  count
+end
+
+hw = HardwareSupportDialog.new(entry: loupe)
+hw.build
+plain_check("hardware support dialog title", hw.dialog.title, "Hardware Support")
+plain_check("hardware support dialog lists controls", list_box_row_count(hw.list) >= 5, true)
+
+license = LicenseDialog.new(entry: loupe)
+license.build
+plain_check("license dialog title", license.dialog.title, "License")
+plain_check("license dialog shows floss lozenge for FOSS entry", license.floss_lozenge.box.visible?, true)
+plain_check("license dialog hides proprietary lozenge for FOSS entry", license.other_lozenge.box.visible?, false)
+
 puts
 puts "#{$plain_checks - $plain_failures.length} of #{$plain_checks} plain checks passed"
 $plain_failures.each { |label| puts "  failed plain check: #{label}" }
