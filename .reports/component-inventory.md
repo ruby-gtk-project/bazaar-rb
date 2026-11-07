@@ -58,6 +58,18 @@ preferences. No `lib/*.rb` covers that config layer yet (see
 `bz-root-curated-config`, `bz-root-blocklist`, `bz-pride-flag-config` rows
 below).
 
+## Binding-gem wiring (checked, not regressed)
+
+`bazaar-rb.gemspec` declares `gtk4`, `adwaita`, `glib2`, `appstream`,
+`flatpak`, `glycin`, `libglycin-gtk4`, `libxmlb`, `malcontent` and `soup3`.
+Every one of the seven app-specific gems is `require`d and called from real
+code under `lib/`: `flatpak` in `lib/flatpak_backend.rb`, `appstream` in
+`lib/spdx.rb`, `soup3`/`glycin`/`libglycin-gtk4` in `lib/appstream_parser.rb`
+(including a live `GlyGtk4.frame_get_texture` call), `libxmlb` in
+`lib/donations_dialog.rb` (`Xmlb::BuilderSource`/`Xmlb::Builder`), and
+`malcontent` in `lib/malcontent_service.rb`. `flake.nix` already points
+`gemdir` at `./nix`. No regression found; no wiring change made this pass.
+
 ## Translation catalogue
 
 31 languages shipped (`po/LINGUAS`): ar, be, bg, bs, cs, de, el, es, eu,
@@ -91,7 +103,12 @@ tree at all. Counts below are **unit counts** (one upstream class = one row),
 not widget instance counts — see `.claude/skills/component-identification` for
 the full per-widget scan, which is the next-level task once units are assigned.
 
-**Totals: 185 upstream units, 25 already have a corresponding `lib/*.rb` file by name, 160 do not.**
+**Totals: 185 upstream units, 32 already have a corresponding `lib/*.rb` file by name, 153 do not.**
+
+(Updated from a prior pass of 25/160: `lib/donations_dialog.rb`,
+`lib/hardware_support_dialog.rb`, `lib/license_dialog.rb`, `lib/lozenge.rb`,
+`lib/malcontent_service.rb`, `lib/context_row.rb` and `lib/spdx.rb` have since
+landed — see the updated rows below.)
 
 Note: a handful of existing `lib/*.rb` files were ported under a different name
 than their upstream basename and so are *not* auto-matched by this table — see
@@ -105,10 +122,10 @@ than their upstream basename and so are *not* auto-matched by this table — see
 | `src/bz-age-rating-dialog.*` | dialog | `lib/age_rating_dialog.rb` | no |
 | `src/bz-app-size-dialog.*` | dialog | `lib/app_size_dialog.rb` | no |
 | `src/bz-bundle-install-dialog.*` | dialog | `lib/bundle_install_dialog.rb` | no |
-| `src/bz-donations-dialog.*` | dialog | `lib/donations_dialog.rb` | no |
+| `src/bz-donations-dialog.*` | dialog | `lib/donations_dialog.rb` | YES |
 | `src/bz-error-dialog.*` | dialog | `lib/error_dialog.rb` | YES |
-| `src/bz-hardware-support-dialog.*` | dialog | `lib/hardware_support_dialog.rb` | no |
-| `src/bz-license-dialog.*` | dialog | `lib/license_dialog.rb` | no |
+| `src/bz-hardware-support-dialog.*` | dialog | `lib/hardware_support_dialog.rb` | YES |
+| `src/bz-license-dialog.*` | dialog | `lib/license_dialog.rb` | YES |
 | `src/bz-preferences-dialog.*` | dialog | `lib/preferences_dialog.rb` | YES |
 | `src/bz-releases-dialog.*` | dialog | `lib/releases_dialog.rb` | no |
 | `src/bz-safety-dialog.*` | dialog | `lib/safety_dialog.rb` | no |
@@ -148,7 +165,7 @@ than their upstream basename and so are *not* auto-matched by this table — see
 | `src/bz-flathub-curated-section.*` | widget | `lib/flathub_curated_section.rb` | no |
 | `src/bz-inspector.*` | widget | `lib/inspector.rb` | no |
 | `src/bz-install-controls.*` | widget | `lib/install_controls.rb` | no |
-| `src/bz-lozenge.*` | widget | `lib/lozenge.rb` | no |
+| `src/bz-lozenge.*` | widget | `lib/lozenge.rb` | YES |
 | `src/bz-progress-bar.*` | widget | `lib/progress_bar.rb` | YES |
 | `src/bz-releases-list.*` | widget | `lib/releases_list.rb` | YES |
 | `src/bz-rounded-picture.*` | widget | `lib/rounded_picture.rb` | no |
@@ -167,7 +184,7 @@ than their upstream basename and so are *not* auto-matched by this table — see
 
 | Upstream | kind | → lib path | exists? |
 |---|---|---|---|
-| `src/bz-context-row.*` | row | `lib/context_row.rb` | no |
+| `src/bz-context-row.*` | row | `lib/context_row.rb` | YES |
 | `src/bz-entry-selection-row.*` | row | `lib/entry_selection_row.rb` | no |
 | `src/bz-row-view.*` | row | `lib/row_view.rb` | no |
 
@@ -212,7 +229,7 @@ than their upstream basename and so are *not* auto-matched by this table — see
 | `src/bz-entry-cache-manager.*` | service | `lib/entry_cache_manager.rb` | no |
 | `src/bz-flathub-state.*` | service | `lib/flathub_state.rb` | no |
 | `src/bz-flatpak-instance.*` | service | `lib/flatpak_instance.rb` | no |
-| `src/bz-malcontent-service.*` | service | `lib/malcontent_service.rb` | no |
+| `src/bz-malcontent-service.*` | service | `lib/malcontent_service.rb` | YES |
 | `src/bz-search-engine.*` | service | `lib/search_engine.rb` | YES |
 | `src/bz-transaction-manager.*` | service | `lib/transaction_manager.rb` | YES |
 | `src/dl-worker.*` | service | `lib/dl_worker.rb` | no |
@@ -329,5 +346,5 @@ than their upstream basename and so are *not* auto-matched by this table — see
 | `src/progress-bar-designs/common.*` | other | `lib/progress_bar_designs/common.rb` | no |
 | `src/progress-bar-designs/pride/pride.*` | other | `lib/progress_bar_designs/pride/pride.rb` | no |
 | `src/search-index.*` | other | `lib/search_index.rb` | no |
-| `src/spdx.*` | other | `lib/spdx.rb` | no |
+| `src/spdx.*` | other | `lib/spdx.rb` | YES |
 | `src/template-callbacks.*` | other | `lib/template_callbacks.rb` | YES |
