@@ -111,13 +111,53 @@ CATALOGUE = <<~XML
   </components>
 XML
 
-# The UI-driving run (part 2, below) uses this trimmed catalogue instead: the
-# remote-icon component's HTTP round trip (plus the fork it runs in) adds
-# latency the timed driver steps are not built to absorb, and the soup3/
-# glycin remote-fetch path is already proven, for real, by the plain check
-# above — the UI run only needs to prove the *wiring* (actions, dialogs,
-# transactions), not re-exercise every gem a second time under a timer.
-UI_CATALOGUE = CATALOGUE.sub(%r{\s*<component type="desktop-application">\s*<id>org\.example\.RemoteIcon</id>.*?</component>\n}m, "\n")
+# The UI-driving run (part 2, below) uses this unmodified catalogue instead
+# — no icons at all, same as upstream's original fixture. Each glycin decode
+# spawns glycin-loaders' sandboxed per-format worker as a real subprocess
+# (visible in its own error traces), and the soup3 fetch runs through the
+# forked loopback server above; both add OS-scheduling latency that is
+# variable under load and that the single-tick timed driver steps below are
+# not built to absorb (reproduced directly: with an icon on this catalogue,
+# "initial sync completes" intermittently fails under host contention even
+# at a 1000ms step interval). The glycin/libglycin-gtk4/soup3 code paths are
+# already proven, for real, by the untimed plain checks above — the UI run
+# only needs to prove the *wiring* (actions, dialogs, transactions), not
+# re-exercise every gem a second time under a timer.
+UI_CATALOGUE = <<~XML
+  <?xml version="1.0"?>
+  <components version="0.14" origin="flathub">
+    <component type="desktop-application">
+      <id>org.gnome.Loupe</id>
+      <name>Loupe</name>
+      <summary>Browse images</summary>
+      <description><p>A simple image viewer.</p><ul><li>Fast</li><li>Small</li></ul></description>
+      <developer id="org.gnome"><name>The GNOME Project</name></developer>
+      <project_license>GPL-3.0-or-later</project_license>
+      <metadata_license>CC0-1.0</metadata_license>
+      <categories><category>Graphics</category></categories>
+      <keywords><keyword>image</keyword><keyword>viewer</keyword></keywords>
+      <url type="homepage">https://apps.gnome.org/Loupe</url>
+      <url type="donation">https://donate.gnome.org</url>
+      <bundle type="flatpak">app/org.gnome.Loupe/x86_64/stable</bundle>
+      <releases>
+        <release version="48.1" timestamp="1714000000"><description><p>Bug fixes.</p></description></release>
+      </releases>
+      <supports><control>touch</control><control>keyboard</control></supports>
+      <custom><value key="flathub::verification::verified">true</value></custom>
+    </component>
+    <component type="desktop-application">
+      <id>com.example.Proprietary</id>
+      <name>Example</name>
+      <summary>An example app</summary>
+      <project_license>LicenseRef-proprietary</project_license>
+      <bundle type="flatpak">app/com.example.Proprietary/x86_64/stable</bundle>
+      <supports><control>pointing</control></supports>
+      <content_rating type="oars-1.1">
+        <content_attribute id="violence-realistic">intense</content_attribute>
+      </content_rating>
+    </component>
+  </components>
+XML
 
 # A backend that answers out of the catalogue above instead of talking to
 # flatpak. `FAIL_REF` is scheduled but never finishes, which is how the
@@ -383,8 +423,6 @@ end
 
 ui_catalogue_dir = Dir.mktmpdir("bazaar-ui-catalogue")
 File.write(File.join(ui_catalogue_dir, "appstream.xml"), UI_CATALOGUE)
-FileUtils.mkdir_p(File.join(ui_catalogue_dir, "icons", "flatpak", "64x64"))
-File.binwrite(File.join(ui_catalogue_dir, "icons", "flatpak", "64x64", "org.gnome.Loupe.png"), tiny_png)
 ui_backend = FakeBackend.new(ui_catalogue_dir)
 
 app_object = Bazaar::Application.new
