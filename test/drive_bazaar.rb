@@ -12,6 +12,8 @@
 # A scratch XDG_CONFIG_HOME keeps this from reading or writing real settings.
 require "fileutils"
 require "tmpdir"
+require "socket"
+require "zlib"
 
 ENV["XDG_CONFIG_HOME"] = Dir.mktmpdir("bazaar-drive")
 
@@ -22,6 +24,46 @@ require_relative "gtk_driver"
 
 SHOTS = File.expand_path("../tmp/shots", __dir__)
 FileUtils.rm_rf(SHOTS)
+
+# A minimal, real 1x1 red PNG, built by hand so the glycin/soup3 checks below
+# decode and fetch actual bytes rather than a canned fixture file.
+def tiny_png
+  chunk = ->(tag, data) { [data.bytesize].pack("N") + tag + data + [Zlib.crc32(tag + data)].pack("N") }
+  "\x89PNG\r\n\x1a\n".b +
+    chunk.call("IHDR", [1, 1, 8, 2, 0, 0, 0].pack("NNC5")) +
+    chunk.call("IDAT", Zlib::Deflate.deflate("\x00\xff\x00\x00".b)) +
+    chunk.call("IEND", "")
+end
+
+# A loopback HTTP server that serves `tiny_png`, so the soup3 remote-icon
+# fetch in AppstreamParser#apply_icon runs an actual HTTP round trip instead
+# of touching the real network.
+#
+# This runs in a forked child process, not a Ruby Thread: `Soup::Session
+# #send_and_read` is a blocking call into the C library that does not yield
+# the GVL, so a same-process accept loop would never get scheduled while the
+# request is in flight (reproduced directly — it deadlocks). A separate OS
+# process has no such dependency on this process's GVL.
+ICON_SERVER = TCPServer.new("127.0.0.1", 0)
+ICON_SERVER_PORT = ICON_SERVER.addr[1]
+ICON_SERVER_PID = fork do
+  loop do
+    client = ICON_SERVER.accept
+    loop { break if client.gets.to_s.chomp.empty? } # request line, then headers to the blank line
+    body = tiny_png
+    client.write("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}")
+    client.close
+  rescue StandardError
+    nil
+  end
+rescue StandardError
+  nil
+end
+at_exit do
+  Process.kill("TERM", ICON_SERVER_PID)
+rescue StandardError
+  nil
+end
 
 CATALOGUE = <<~XML
   <?xml version="1.0"?>
@@ -39,6 +81,7 @@ CATALOGUE = <<~XML
       <url type="homepage">https://apps.gnome.org/Loupe</url>
       <url type="donation">https://donate.gnome.org</url>
       <bundle type="flatpak">app/org.gnome.Loupe/x86_64/stable</bundle>
+      <icon type="cached" width="64" height="64">org.gnome.Loupe.png</icon>
       <releases>
         <release version="48.1" timestamp="1714000000"><description><p>Bug fixes.</p></description></release>
       </releases>
@@ -52,9 +95,29 @@ CATALOGUE = <<~XML
       <project_license>LicenseRef-proprietary</project_license>
       <bundle type="flatpak">app/com.example.Proprietary/x86_64/stable</bundle>
       <supports><control>pointing</control></supports>
+      <content_rating type="oars-1.1">
+        <content_attribute id="violence-realistic">intense</content_attribute>
+      </content_rating>
+    </component>
+    <component type="desktop-application">
+      <id>org.example.RemoteIcon</id>
+      <name>RemoteIcon</name>
+      <summary>An app whose icon has no local AppStream catalogue copy</summary>
+      <project_license>MIT</project_license>
+      <bundle type="flatpak">app/org.example.RemoteIcon/x86_64/stable</bundle>
+      <icon type="remote">http://127.0.0.1:#{ICON_SERVER_PORT}/icon.png</icon>
+      <supports><control>pointing</control></supports>
     </component>
   </components>
 XML
+
+# The UI-driving run (part 2, below) uses this trimmed catalogue instead: the
+# remote-icon component's HTTP round trip (plus the fork it runs in) adds
+# latency the timed driver steps are not built to absorb, and the soup3/
+# glycin remote-fetch path is already proven, for real, by the plain check
+# above — the UI run only needs to prove the *wiring* (actions, dialogs,
+# transactions), not re-exercise every gem a second time under a timer.
+UI_CATALOGUE = CATALOGUE.sub(%r{\s*<component type="desktop-application">\s*<id>org\.example\.RemoteIcon</id>.*?</component>\n}m, "\n")
 
 # A backend that answers out of the catalogue above instead of talking to
 # flatpak. `FAIL_REF` is scheduled but never finishes, which is how the
@@ -65,6 +128,7 @@ class FakeBackend < Backend
   REFS = {
     "app/org.gnome.Loupe/x86_64/stable"         => { download_size: 4_500_000, installed_size: 9_000_000 },
     "app/com.example.Proprietary/x86_64/stable" => { download_size: 1_000_000, installed_size: 2_000_000 },
+    "app/org.example.RemoteIcon/x86_64/stable"  => { download_size: 500_000, installed_size: 900_000 },
   }.freeze
 
   attr_accessor :fail_next
@@ -98,8 +162,9 @@ class FakeBackend < Backend
         AppstreamParser.populate_entry(
           entry,
           component,
-          remote_name: "flathub",
-          kinds:       Entry::KIND_APPLICATION,
+          appstream_dir: @catalogue_dir,
+          remote_name:   "flathub",
+          kinds:         Entry::KIND_APPLICATION,
         )
       end
     end
@@ -174,13 +239,16 @@ end
 
 catalogue_dir = Dir.mktmpdir("bazaar-catalogue")
 File.write(File.join(catalogue_dir, "appstream.xml"), CATALOGUE)
+FileUtils.mkdir_p(File.join(catalogue_dir, "icons", "flatpak", "64x64"))
+File.binwrite(File.join(catalogue_dir, "icons", "flatpak", "64x64", "org.gnome.Loupe.png"), tiny_png)
 
 backend = FakeBackend.new(catalogue_dir)
 entries = backend.retrieve_remote_entries
-loupe = entries.first
-proprietary = entries.last
+loupe = entries[0]
+proprietary = entries[1]
+remote_icon_entry = entries[2]
 
-plain_check("parsed entries", entries.length, 2)
+plain_check("parsed entries", entries.length, 3)
 plain_check("title", loupe.title, "Loupe")
 plain_check("developer", loupe.developer, "The GNOME Project")
 plain_check("summary", loupe.description, "Browse images")
@@ -194,6 +262,23 @@ plain_check("mobile category", loupe.has_category?("mobile"), true)
 plain_check("releases", loupe.version_history.first.version, "48.1")
 plain_check("share urls", loupe.share_urls.map(&:id).first, "flathub")
 plain_check("usefulness beats proprietary", loupe.calc_usefulness > proprietary.calc_usefulness, true)
+
+# glycin + libglycin-gtk4: a local icon under the AppStream catalogue's
+# icons/flatpak directory is decoded through Gly::Loader ->
+# GlyGtk4.frame_get_texture (AppstreamParser#load_texture), not
+# Gdk::Texture.new.
+plain_check("local icon decoded into a real texture via glycin", loupe.icon_paintable.is_a?(Gdk::Texture), true)
+plain_check("local icon texture has pixels", loupe.icon_paintable&.width.to_i > 0, true)
+
+# soup3 + glycin: an icon with no local catalogue copy is fetched over HTTP
+# (AppstreamParser#fetch_remote_texture, against the loopback server above)
+# and decoded the same way (AppstreamParser#decode_bytes).
+plain_check("remote-only icon fetched via soup3", remote_icon_entry.icon_url.to_s.start_with?("http://127.0.0.1"), true)
+plain_check("remote icon decoded into a real texture via glycin", remote_icon_entry.icon_paintable.is_a?(Gdk::Texture), true)
+
+# malcontent: the OARS content rating upstream's validate_group_for_ui
+# compares against StateInfo#parental_age_rating.
+plain_check("proprietary entry's oars rating parsed", proprietary.content_rating&.age, 16)
 
 group = EntryGroup.new
 group.add(loupe)
@@ -297,7 +382,9 @@ def child_count(box)
 end
 
 ui_catalogue_dir = Dir.mktmpdir("bazaar-ui-catalogue")
-File.write(File.join(ui_catalogue_dir, "appstream.xml"), CATALOGUE)
+File.write(File.join(ui_catalogue_dir, "appstream.xml"), UI_CATALOGUE)
+FileUtils.mkdir_p(File.join(ui_catalogue_dir, "icons", "flatpak", "64x64"))
+File.binwrite(File.join(ui_catalogue_dir, "icons", "flatpak", "64x64", "org.gnome.Loupe.png"), tiny_png)
 ui_backend = FakeBackend.new(ui_catalogue_dir)
 
 app_object = Bazaar::Application.new
@@ -464,5 +551,27 @@ GtkDriver.drive(app_object, shots: SHOTS, interval: 600, timeout: 60) do |d, app
   d.step("donate action opens the donation link without crashing the app") do
     app.app.activate_action("donate", nil)
     d.check("app still alive after donate") { !app.app.active_window.nil? }
+  end
+
+  d.step("malcontent queried the system bus at startup") do
+    # `app.build`'s "startup" handler already called `malcontent.start` for
+    # real, over Gio.bus_get_sync(:system, nil), before this driver's first
+    # step ever ran. In this sandbox there is no accounts service, so it
+    # takes the documented failure path and records why; either outcome
+    # proves the gem's manager was actually invoked, not stubbed.
+    d.check("malcontent reported a reason or produced a rating") do
+      !app.malcontent.unavailable_reason.nil? || app.state.parental_age_rating != -1
+    end
+  end
+
+  d.step("a group whose OARS rating exceeds the parental ceiling is hidden") do
+    rated_group = app.send(:groups_by_id)["com.example.Proprietary"]
+    d.check("fixture group carries the parsed OARS rating") { rated_group.content_age_rating == 16 }
+    app.state.parental_age_rating = 10
+    d.check("group above the ceiling is not visible") { !app.visible?(rated_group) }
+    app.state.parental_age_rating = 18
+    d.check("group below the ceiling is visible again") { app.visible?(rated_group) }
+    app.state.parental_age_rating = -1
+    d.check("ceiling disabled (-1) shows the group regardless") { app.visible?(rated_group) }
   end
 end
