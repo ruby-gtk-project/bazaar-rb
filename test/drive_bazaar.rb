@@ -400,11 +400,12 @@ plain_check("license dialog title", license.dialog.title, "License")
 plain_check("license dialog shows floss lozenge for FOSS entry", license.floss_lozenge.box.visible?, true)
 plain_check("license dialog hides proprietary lozenge for FOSS entry", license.other_lozenge.box.visible?, false)
 
-# AspectPicture and EntrySelectionRow are ported and functional, but, like
-# HardwareSupportDialog and LicenseDialog above, nothing in the running app
-# builds one yet (AspectPicture awaits the detail page; EntrySelectionRow
-# awaits the "same app, multiple remotes" picker dialog). These checks build
-# them directly so the classes are proven rather than merely present.
+# AspectPicture is ported and functional, but, like HardwareSupportDialog and
+# LicenseDialog above, nothing in the running app builds one yet — it awaits
+# the detail page. EntrySelectionRow is exercised below as the real app does,
+# through TransactionDialog's repository picker; these two checks build it
+# directly as well, to cover the subtitle and person-icon behaviour a single-
+# candidate confirmation never shows.
 require_relative "../lib/aspect_picture"
 require_relative "../lib/entry_selection_row"
 
@@ -611,6 +612,47 @@ GtkDriver.drive(app_object, shots: SHOTS, interval: 600, timeout: 60) do |d, app
     app.window.library_page.refresh
     d.check("no transactions left to clear") { !app.send(:transactions).has_transactions? }
     d.check("clear revealer collapsed") { !app.window.library_page.clear_revealer.reveal_child? }
+  end
+
+  d.step("window.remove-group opens a TransactionDialog before scheduling the removal") do
+    before = app.send(:transactions).transactions.length
+    # Through the real GAction path (Gio::ActionGroup#activate_action, the
+    # same call a menu item's `action-target` makes), not a direct method
+    # call: this is what proves `string_action`'s parameter unwrapping
+    # actually works, rather than merely being `require`d and called.
+    app.window.action_group.activate_action("remove-group", GLib::Variant.new("org.gnome.Loupe"))
+    dialog = app.window.window.visible_dialog
+    d.check("remove confirmation is an Adw.AlertDialog") { dialog.is_a?(Adwaita::AlertDialog) }
+    d.check("heading names the app") { dialog.heading.to_s.include?("Loupe") }
+    dialog.signal_emit("response", "remove")
+    d.check("confirming schedules a removal transaction") { app.send(:transactions).transactions.length == before + 1 }
+    d.check("the scheduled transaction removes the Loupe entry") do
+      app.send(:transactions).transactions.last.removals.map(&:id) == ["org.gnome.Loupe"]
+    end
+  end
+
+  d.step("window.remove-group does nothing when the confirmation is cancelled") do
+    before = app.send(:transactions).transactions.length
+    app.window.action_group.activate_action("remove-group", GLib::Variant.new("org.gnome.Loupe"))
+    dialog = app.window.window.visible_dialog
+    dialog.signal_emit("response", "cancel")
+    d.check("cancelling schedules nothing") { app.send(:transactions).transactions.length == before }
+  end
+
+  d.step("TransactionListDialog filters addons out of the body and lists only apps") do
+    addon_entry = Entry.new(id: "org.gnome.Loupe.Locale", title: "Loupe (Locale)", kinds: Entry::KIND_ADDON)
+    list_dialog = TransactionListDialog.new(
+      entries: [loupe, addon_entry],
+      heading: "Install 2 Apps?",
+      body: "The following will be installed.",
+      secondary_label: "%d addons will be installed.",
+    )
+    built = list_dialog.build
+    d.check("heading is set") { built.heading == "Install 2 Apps?" }
+    d.check("app list shows only the application-kind entry") { list_box_row_count(list_dialog.app_list) == 1 }
+    d.check("secondary label counts the folded-out addon") { list_dialog.secondary_label.label == "1 addons will be installed." }
+    built.signal_emit("response", "confirm")
+    d.check("was_confirmed reports the response") { list_dialog.confirmed? == true }
   end
 
   d.step("AuthState tracks a signed-in session and notifies on change") do

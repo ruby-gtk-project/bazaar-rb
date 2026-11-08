@@ -4,6 +4,7 @@ require "adwaita"
 require_relative "library_page"
 require_relative "template_callbacks"
 require_relative "transaction"
+require_relative "transaction_dialog"
 
 # Window is Bazaar's main window: the view switcher, the main menu, the
 # banners, the toasts, and the navigation view every pushed page lands in.
@@ -23,7 +24,10 @@ require_relative "transaction"
 # Three of upstream's view-stack pages — Curated, Explore and Search — and
 # the pages the remaining actions push (the full view, the add-ons dialog,
 # the leftover-user-data page) belong to components that are not ported yet,
-# so this window carries the Library page and the actions that drive it.
+# so this window still carries only the Library page. Installing and
+# removing a group now go through TransactionDialog, same as upstream's
+# bz_transaction_dialog_show, for the repository picker and the
+# keep/delete-user-data choice.
 class Window
   DEFAULT_WIDTH = 1220
   DEFAULT_HEIGHT = 900
@@ -387,9 +391,25 @@ class Window
       end
     end
 
+    # The Ruby binding already unwraps a parameterized action's GVariant
+    # into a plain Ruby String by the time it reaches the "activate"
+    # signal, whichever way the action was invoked — through a real
+    # Gio::ActionGroup#activate_action call, same as a menu item's
+    # `action-target`. Calling `.get_string` on that plain String raises
+    # `NoMethodError`, which is why nothing driving a window.* action
+    # through the real GAction path ever reached these; `unwrap_string`
+    # also accepts an actual GLib::Variant, for whichever binding version
+    # does hand one over.
     def string_action(name, &block)
       Gio::SimpleAction.new(name, GLib::VariantType.new("s")).tap do |action|
-        action.signal_connect("activate") { |_action, parameter| block.call(parameter.get_string) }
+        action.signal_connect("activate") { |_action, parameter| block.call(unwrap_string(parameter)) }
+      end
+    end
+
+    def unwrap_string(parameter)
+      case parameter
+      when GLib::Variant then parameter.get_string
+      else parameter.to_s
       end
     end
 
@@ -436,13 +456,31 @@ class Window
     end
 
     def install_group(id)
-      group_for(id).then { |group| schedule(installs: entries_of(group)) }
+      group_for(id).then { |group| confirm_transaction(group, remove: false) }
     end
 
     def remove_group_by_id(id) = remove_group(group_for(id))
 
-    def remove_group(group)
-      schedule(removals: entries_of(group))
+    def remove_group(group) = confirm_transaction(group, remove: true)
+
+    # Upstream's bz_transaction_dialog_show: lets the user pick which
+    # repository's copy to use when a group holds more than one, and, on a
+    # removal, whether to keep or delete the app's user data, before the
+    # change is handed to the transaction manager.
+    def confirm_transaction(group, remove:)
+      case group
+      when nil then nil
+      else
+        TransactionDialog.new(group: group, remove: remove, repositories: @state.repositories).show(window) do |result|
+          case result.confirmed
+          when true
+            case remove
+            when true then schedule(removals: [result.selected_entry].compact)
+            else schedule(installs: [result.selected_entry].compact)
+            end
+          end
+        end
+      end
     end
 
     def cancel_group(id)

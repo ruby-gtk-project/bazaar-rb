@@ -191,10 +191,22 @@ module Bazaar
         end
       end
 
+      # See Window#string_action's comment: the Ruby binding hands the
+      # "activate" signal a plain String, not the GLib::Variant
+      # `.get_string` assumes, for every parameterized app action
+      # ("app.search", "app.show-app-id", "app.open-location") invoked
+      # through the real GAction path.
       def string_action(name, &block)
         Gio::SimpleAction.new(name, GLib::VariantType.new("s")).tap do |simple|
-          simple.signal_connect("activate") { |_action, parameter| block.call(parameter.get_string) }
+          simple.signal_connect("activate") { |_action, parameter| block.call(unwrap_string(parameter)) }
           app.add_action(simple)
+        end
+      end
+
+      def unwrap_string(parameter)
+        case parameter
+        when GLib::Variant then parameter.get_string
+        else parameter.to_s
         end
       end
 
