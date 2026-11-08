@@ -166,9 +166,13 @@ module Bazaar
         end
       end
 
-      # Ported from the app_actions table of src/bz-application.c. The actions
-      # whose pages are not ported yet are not installed, so a menu item for
-      # one is shown insensitive rather than doing nothing.
+      # Ported from the app_actions table of src/bz-application.c. Still
+      # missing: flathub-login, flathub-logout and flathub-favorites (no
+      # Flathub auth flow is ported beyond AuthState's plain data holder)
+      # and bazaar-inspector (a GTK debug-tools action, not user-facing).
+      # Every other action in upstream's table is installed below; a menu
+      # item for one of the missing four is shown insensitive rather than
+      # doing nothing.
       def install_actions
         action("quit") { app.quit }
         action("about") { AboutDialog.new.build.present(active_window) }
