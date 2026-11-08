@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Upstream | `main` @ `3d347d5` |
-| Port | `ruby` @ `cc88d35` |
+| Port | `ruby` @ `34f2564` |
 | Domain | `io.github.kolunmi.Bazaar` (upstream's `.mo`/app-id domain — unconfirmed source, see below) |
 | Upstream messages (non-po source) | 803 |
 | Ported | 0 |
@@ -23,10 +23,18 @@ ls /tmp/bazaar-upstream/po/*.po | wc -l   # 31
 scripts/msgid-census.sh .  (the ruby branch) > port-msgids.tsv   # 0 rows
 ```
 
-**The port's census is empty: zero rows.** `grep -rn 'gettext\|_('
-lib/*.rb` finds nothing. `Gemfile` and `bazaar-rb.gemspec` declare no
-gettext dependency. There is no `po/` directory, no `LINGUAS`, no
-`POTFILES.in`, no `.mo` build step, anywhere in the `ruby` branch.
+**The port's census is still empty: zero rows.** `grep -rniE
+'gettext|_\(|N_\(' lib/ exe/` finds nothing (re-run this audit). `Gemfile`
+and `bazaar-rb.gemspec` declare no gettext dependency. There is no `po/`
+directory, no `LINGUAS`, no `POTFILES.in`, no `.mo` build step, anywhere in
+the `ruby` branch. The 8 units ported since the previous round
+(`AspectPicture`, `AuthState`, `ContextRow`, `DonationsDialog`,
+`EntrySelectionRow`, `HardwareSupportDialog`, `LicenseDialog`, `Lozenge` —
+`lib/donations_dialog.rb`, `lib/hardware_support_dialog.rb` and
+`lib/license_dialog.rb` alone add over 600 lines of new user-facing labels)
+add more bare English literals to the pile, not fewer — the gap did not
+shrink this round, it grew in absolute terms even as the component count
+improved.
 
 ## Step 2 — the diff
 
@@ -53,11 +61,12 @@ msgids transcribed byte-for-byte from upstream, not retyped.
   Not "0 of 78" as in some other forks in this org — this upstream carries
   31 `.po` files — but the finding is the same shape: `0 of 31` is the
   headline, and a raw "messages ported" count would have hidden it.
-- Every label in the ~15 units the port does build (window menus, library
-  page, about/shortcuts/preferences/error dialogs, settings) is English-only
-  and will stay English-only in any locale, because nothing marks the
-  strings and nothing loads a catalogue.
-- The 68 unbuilt units (`.reports/component-parity.md`) contribute their
+- Every label in the ~27 units the port does build (window menus, library
+  page, about/shortcuts/preferences/error/donations/hardware-support/license
+  dialogs, AuthState UI, settings) is English-only and will stay
+  English-only in any locale, because nothing marks the strings and nothing
+  loads a catalogue.
+- The 60 unbuilt units (`.reports/component-parity.md`) contribute their
   share of the 803 messages too — closing the translation gap for a string
   that belongs to an unbuilt widget waits on the component, same as the
   skill's rule states; none of those rows can become `ported` before the
