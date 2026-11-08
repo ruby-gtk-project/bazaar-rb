@@ -400,6 +400,33 @@ plain_check("license dialog title", license.dialog.title, "License")
 plain_check("license dialog shows floss lozenge for FOSS entry", license.floss_lozenge.box.visible?, true)
 plain_check("license dialog hides proprietary lozenge for FOSS entry", license.other_lozenge.box.visible?, false)
 
+# AspectPicture and EntrySelectionRow are ported and functional, but, like
+# HardwareSupportDialog and LicenseDialog above, nothing in the running app
+# builds one yet (AspectPicture awaits the detail page; EntrySelectionRow
+# awaits the "same app, multiple remotes" picker dialog). These checks build
+# them directly so the classes are proven rather than merely present.
+require_relative "../lib/aspect_picture"
+require_relative "../lib/entry_selection_row"
+
+aspect_picture = AspectPicture.new(paintable: loupe.icon_paintable)
+aspect_picture.build
+plain_check("aspect picture wraps a cover-fit Gtk::Picture", aspect_picture.picture.content_fit, :cover)
+plain_check("aspect picture frame ratio tracks the icon's intrinsic aspect", aspect_picture.frame.ratio, 1.0)
+aspect_picture.ratio = 1.5
+plain_check("aspect picture frame ratio follows an explicit ratio=", aspect_picture.frame.ratio, 1.5)
+
+flathub_repo = Repository.new(name: "flathub", title: "Flathub", url: "https://flathub.org/repo", is_user: false)
+user_repo = Repository.new(name: "mine", title: "My Remote", url: "https://example.com/repo", is_user: true)
+system_selection = EntrySelectionRow.new(entry: loupe, repository: flathub_repo)
+user_selection = EntrySelectionRow.new(entry: loupe, repository: user_repo)
+system_selection.build
+user_selection.build
+plain_check("entry selection row shows the repository title", system_selection.row.title, "Flathub")
+plain_check("entry selection row subtitle names the entry version", system_selection.row.subtitle.to_s.include?("48.1"), true)
+plain_check("entry selection row hides the person icon for a system remote", system_selection.user_icon.visible?, false)
+plain_check("entry selection row shows the person icon for a user remote", user_selection.user_icon.visible?, true)
+plain_check("entry selection row's radio is its activatable widget", system_selection.row.activatable_widget, system_selection.radio)
+
 puts
 puts "#{$plain_checks - $plain_failures.length} of #{$plain_checks} plain checks passed"
 $plain_failures.each { |label| puts "  failed plain check: #{label}" }
@@ -584,6 +611,18 @@ GtkDriver.drive(app_object, shots: SHOTS, interval: 600, timeout: 60) do |d, app
     app.window.library_page.refresh
     d.check("no transactions left to clear") { !app.send(:transactions).has_transactions? }
     d.check("clear revealer collapsed") { !app.window.library_page.clear_revealer.reveal_child? }
+  end
+
+  d.step("AuthState tracks a signed-in session and notifies on change") do
+    changes = 0
+    app.auth_state.on_change { changes += 1 }
+    d.check("not authenticated before sign-in") { !app.auth_state.authenticated? }
+    app.auth_state.set_authenticated(name: "Ada", token: "tok-123", profile_icon_url: "https://example.com/a.png")
+    d.check("authenticated after set_authenticated") { app.auth_state.authenticated? }
+    d.check("name recorded") { app.auth_state.name == "Ada" }
+    d.check("on_change fired for the sign-in") { changes == 1 }
+    app.auth_state.clear
+    d.check("not authenticated after clear") { !app.auth_state.authenticated? }
   end
 
   d.step("donate action opens the donation link without crashing the app") do

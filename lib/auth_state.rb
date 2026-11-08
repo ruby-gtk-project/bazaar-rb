@@ -36,15 +36,12 @@ class AuthState
   def authenticated? = !@token.nil? && !@token.empty?
 
   def set_authenticated(name:, token:, token_expires: nil, profile_icon_url: nil)
-    was_authenticated = authenticated?
-
     @name = name
     @token = token
     @token_expires = token_expires
     @profile_icon_url = profile_icon_url
 
     schedule_token_expiration
-    notify_listeners unless was_authenticated == authenticated?
     notify_listeners
   end
 
