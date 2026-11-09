@@ -9,11 +9,11 @@
 source "https://rubygems.org"
 
 gem "adwaita"
-gem "gtk4"
-gem "glib2"
 gem "appstream"
 gem "flatpak"
+gem "glib2"
 gem "glycin"
+gem "gtk4"
 gem "libglycin-gtk4"
 gem "libxmlb"
 gem "malcontent"

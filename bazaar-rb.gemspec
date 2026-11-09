@@ -96,15 +96,12 @@ Gem::Specification.new do |spec|
   spec.executables = ["bazaar"]
   spec.require_paths = ["lib"]
 
-  # Runtime: the GTK4/Libadwaita toolkit this app is built on, plus the
-  # GObject-Introspection-backed bindings to the native libraries the upstream
-  # C app links against directly.
-  spec.add_dependency("gtk4")
   spec.add_dependency("adwaita")
-  spec.add_dependency("glib2")
   spec.add_dependency("appstream")
   spec.add_dependency("flatpak")
+  spec.add_dependency("glib2")
   spec.add_dependency("glycin")
+  spec.add_dependency("gtk4")
   spec.add_dependency("libglycin-gtk4")
   spec.add_dependency("libxmlb")
   spec.add_dependency("malcontent")
